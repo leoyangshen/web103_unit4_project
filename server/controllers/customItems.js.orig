@@ -1,0 +1,108 @@
+import { pool } from '../config/db.js';
+
+// --- Helper function for robust error responses ---
+const sendError = (res, message, status = 500) => {
+    console.error(`[DB Error] Status ${status}: ${message}`);
+    res.status(status).json({ error: message });
+};
+
+// --- READ: Get All Custom Items ---
+export const getCustomItems = async (req, res) => {
+    try {
+        const query = 'SELECT * FROM custom_items ORDER BY created_at DESC';
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        sendError(res, 'Failed to retrieve custom items.', 500);
+    }
+};
+
+// --- READ: Get Single Custom Item by ID ---
+export const getCustomItemById = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = 'SELECT * FROM custom_items WHERE id = $1';
+        const result = await pool.query(query, [id]);
+
+        if (result.rows.length === 0) {
+            return sendError(res, `Custom item with ID ${id} not found.`, 404);
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        sendError(res, `Failed to retrieve custom item ID ${id}.`, 500);
+    }
+};
+
+// --- CREATE: Create New Custom Item ---
+export const createCustomItem = async (req, res) => {
+    const { 
+        item_name, base_type, exterior_color, rim_style, interior_package, total_price 
+    } = req.body;
+
+    try {
+        // SQL query to insert the new custom item
+        const query = `
+            INSERT INTO custom_items 
+                (item_name, base_type, exterior_color, rim_style, interior_package, total_price, created_at)
+            VALUES 
+                ($1, $2, $3, $4, $5, $6, NOW())
+            RETURNING *; 
+        `;
+        const values = [item_name, base_type, exterior_color, rim_style, interior_package, total_price];
+        
+        const result = await pool.query(query, values);
+        res.status(201).json(result.rows[0]); // Return the newly created item
+    } catch (error) {
+        sendError(res, 'Failed to create new custom item.', 500);
+    }
+};
+
+// --- UPDATE: Edit Existing Custom Item ---
+export const updateCustomItem = async (req, res) => {
+    const { id } = req.params;
+    const { 
+        item_name, exterior_color, rim_style, interior_package, total_price 
+    } = req.body;
+
+    try {
+        const query = `
+            UPDATE custom_items
+            SET 
+                item_name = $1, 
+                exterior_color = $2, 
+                rim_style = $3, 
+                interior_package = $4, 
+                total_price = $5
+            WHERE id = $6
+            RETURNING *;
+        `;
+        const values = [item_name, exterior_color, rim_style, interior_package, total_price, id];
+        
+        const result = await pool.query(query, values);
+
+        if (result.rows.length === 0) {
+            return sendError(res, `Custom item with ID ${id} not found for update.`, 404);
+        }
+        res.status(200).json(result.rows[0]); // Return the updated item
+    } catch (error) {
+        sendError(res, `Failed to update custom item ID ${id}.`, 500);
+    }
+};
+
+// --- DELETE: Delete Custom Item by ID ---
+export const deleteCustomItem = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = 'DELETE FROM custom_items WHERE id = $1 RETURNING *';
+        const result = await pool.query(query, [id]);
+
+        if (result.rows.length === 0) {
+            return sendError(res, `Custom item with ID ${id} not found for deletion.`, 404);
+        }
+        // Return a confirmation message or the deleted item
+        res.status(200).json({ message: `Custom item ID ${id} deleted successfully.` });
+    } catch (error) {
+        sendError(res, `Failed to delete custom item ID ${id}.`, 500);
+    }
+};
+

@@ -2,17 +2,19 @@
   "name": "boltbucket",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"cd client && vite\" \"cd server && nodemon server\"",
-    "start": "cd server && node server",
-    "build": "cd client && vite build"
+    "dev": "concurrently \"cd client && vite\" \"cd server && nodemon index.js\"",
+    "start": "cd server && node index.js",
+    "build": "cd client && vite build",
+    "db:reset": "node server/config/reset.js"
   },
   "dependencies": {
     "@picocss/pico": "^1.5.7",
     "concurrently": "^7.6.0",
-    "dotenv": "^16.0.3",
+    "cors": "^2.8.5", 
+    "dotenv": "^16.6.1",
     "express": "^4.18.2",
     "nodemon": "^2.0.21",
-    "pg": "^8.10.0",
+    "pg": "^8.16.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-modal": "^3.16.1",
@@ -26,3 +28,4 @@
     "vite": "^4.2.0"
   }
 }
+

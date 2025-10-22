@@ -1,0 +1,20 @@
+import { checkResponse } from './checkResponse';
+// ... (keep your existing imports and functions)
+
+// NOTE: This file is provided assuming you have existing functions like 
+// getAllCars, getCar, and createCar. This function is an ADDITION.
+
+const API_BASE_URL = 'http://localhost:3000/api/custom_items';
+
+/**
+ * Deletes a custom car configuration by its ID.
+ * @param {number} id - The ID of the car to delete.
+ */
+export const deleteCar = async (id) => {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
+        method: 'DELETE',
+    });
+    // Check for 200/204 status codes
+    return checkResponse(response);
+};
+

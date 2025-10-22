@@ -1,0 +1,38 @@
+const BASE_PRICE = 50000;
+const OPTION_PRICES = {
+    standard: 0,
+    performance: 15000,
+    longRange: 10000,
+    red: 3000,
+    blue: 1500,
+    black: 0,
+    sport: 5000,
+    aero: 2000,
+    standardWheels: 0,
+};
+
+/**
+ * Calculates the total price of the car based on the selected configuration.
+ * @param {object} options - Car configuration options.
+ * @returns {number} The total price.
+ */
+export const calculateTotalPrice = (options) => {
+    let totalPrice = BASE_PRICE;
+
+    // Add Drive/Range Option
+    totalPrice += OPTION_PRICES[options.drive];
+
+    // Add Color Option
+    totalPrice += OPTION_PRICES[options.color];
+
+    // Add Wheel Option
+    totalPrice += OPTION_PRICES[options.wheels];
+    
+    // Add Autopilot Feature
+    if (options.autopilot) {
+        totalPrice += 12000;
+    }
+
+    return totalPrice;
+};
+
