@@ -1,12 +1,22 @@
 import { pool } from '../config/db.js';
 
 // --- Helper function for robust error responses ---
-const sendError = (res, message, status = 500) => {
-    // Log the detailed error on the server side
-    console.error(`[DB Error] Status ${status}: ${message}`); 
-    // Send a generic error response to the client
-    res.status(status).json({ error: 'Server Error. Check server logs for details.' });
+/**
+ * Logs the error detail to the server console and sends a clean response to the client.
+ * @param {object} res - Express response object.
+ * @param {string} message - A clean, human-readable error message.
+ * @param {number} status - The HTTP status code (default 500).
+ * @param {object|string} errorDetail - The raw technical error object (e.g., from the database).
+ */
+const sendError = (res, message, status = 500, errorDetail = null) => {
+    // CRITICAL FIX: Include the technical error detail in the server log
+    const detailLog = errorDetail ? ` Details: ${errorDetail.message || String(errorDetail)}` : '';
+    console.error(`[DB Error] Status ${status}: ${message}${detailLog}`);
+    
+    // Send only the clean message to the client
+    res.status(status).json({ error: message });
 };
+
 
 // --- READ: Get All Custom Items ---
 export const getCustomItems = async (req, res) => {
@@ -15,7 +25,7 @@ export const getCustomItems = async (req, res) => {
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
-        sendError(res, `Failed to retrieve custom items. Details: ${error.message}`, 500);
+        sendError(res, 'Failed to retrieve custom items.', 500, error);
     }
 };
 
@@ -31,63 +41,51 @@ export const getCustomItemById = async (req, res) => {
         }
         res.status(200).json(result.rows[0]);
     } catch (error) {
-        sendError(res, `Failed to retrieve custom item ID ${id}. Details: ${error.message}`, 500);
+        sendError(res, `Failed to retrieve custom item ID ${id}.`, 500, error);
     }
 };
 
 // --- CREATE: Create New Custom Item ---
 export const createCustomItem = async (req, res) => {
-    // The client sends 'name' but the DB expects 'item_name'
-    const { 
-        name, exterior_color, rim_style, interior_package, final_price 
-    } = req.body;
-
-    // Based on the DB schema, we need hardcoded defaults for NOT NULL fields
-    // that the client doesn't provide: base_type and submitted_by.
-    const item_name = name; // Map client's 'name' to DB's 'item_name'
-    const base_type = 'Bolt Bucket'; // Default car model
-    const submitted_by = 'Anonymous User'; // Default user ID/name
-
-    // Check for required fields explicitly from the client payload
-    if (!item_name || !exterior_color || !rim_style || !interior_package || !final_price) {
-        return sendError(res, 'Missing required fields in request body.', 400);
+    // Destructure required fields from the request body
+    const { item_name, base_type, submitted_by, exterior_color, rim_style, interior_package, total_price } = req.body;
+    
+    // Server-side validation for creation
+    if (!item_name || !base_type || !submitted_by || !exterior_color || !rim_style || !interior_package || total_price === undefined) {
+        return sendError(res, 'Missing required fields for new custom item.', 400);
     }
 
     try {
         const query = `
-            INSERT INTO custom_items 
-                (item_name, base_type, submitted_by, exterior_color, rim_style, interior_package, total_price, created_at)
-            VALUES 
-                ($1, $2, $3, $4, $5, $6, $7, NOW())
-            RETURNING *; 
+            INSERT INTO custom_items (item_name, base_type, submitted_by, exterior_color, rim_style, interior_package, total_price)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *;
         `;
-        const values = [
-            item_name, 
-            base_type, 
-            submitted_by, 
-            exterior_color, 
-            rim_style, 
-            interior_package, 
-            final_price
-        ];
+        const values = [item_name, base_type, submitted_by, exterior_color, rim_style, interior_package, total_price];
         
         const result = await pool.query(query, values);
-        res.status(201).json(result.rows[0]); // Return the newly created item
+
+        res.status(201).json(result.rows[0]); // Return the created item
     } catch (error) {
-        sendError(res, `Failed to create new custom item. Details: ${error.message}`, 500);
+        sendError(res, 'Failed to create a new custom item.', 500, error);
     }
 };
 
-// --- UPDATE: Edit Existing Custom Item ---
+// --- UPDATE: Update Custom Item by ID (PUT) ---
 export const updateCustomItem = async (req, res) => {
     const { id } = req.params;
     const { 
-        name, exterior_color, rim_style, interior_package, final_price 
+        item_name, 
+        exterior_color, 
+        rim_style, 
+        interior_package, 
+        total_price 
     } = req.body;
-    
-    // Map client's 'name' to DB's 'item_name'
-    const item_name = name; 
-    const total_price = final_price;
+
+    // 💡 CRITICAL FIX: Server-side validation prevents 500 crash on missing data
+    if (!item_name || !exterior_color || !rim_style || !interior_package || total_price === undefined) {
+        return sendError(res, 'Missing required configuration fields for update.', 400);
+    }
 
     try {
         const query = `
@@ -110,7 +108,8 @@ export const updateCustomItem = async (req, res) => {
         }
         res.status(200).json(result.rows[0]); // Return the updated item
     } catch (error) {
-        sendError(res, `Failed to update custom item ID ${id}. Details: ${error.message}`, 500);
+        // Log the specific database error for debugging (e.g., the NOT NULL violation)
+        sendError(res, `Failed to update custom item ID ${id}.`, 500, error);
     }
 };
 
@@ -124,10 +123,10 @@ export const deleteCustomItem = async (req, res) => {
         if (result.rows.length === 0) {
             return sendError(res, `Custom item with ID ${id} not found for deletion.`, 404);
         }
-        // Return a confirmation message or the deleted item
-        res.status(200).json({ message: `Custom item ID ${id} deleted successfully.` });
+        // Return a clean success status
+        res.status(204).send(); 
     } catch (error) {
-        sendError(res, `Failed to delete custom item ID ${id}. Details: ${error.message}`, 500);
+        sendError(res, `Failed to delete custom item ID ${id}.`, 500, error);
     }
 };
 

@@ -11,9 +11,7 @@ export const createCar = async (newCarData) => {
             body: JSON.stringify(newCarData),
         });
         if (!response.ok) {
-            // Include response text in error for better debugging
-            const errorBody = await response.text();
-            throw new Error(`HTTP error! status: ${response.status} - ${errorBody}`);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         return await response.json();
     } catch (error) {
@@ -38,11 +36,6 @@ export const getAllCars = async () => {
 
 // READ SINGLE (GET)
 export const getCar = async (id) => {
-    // CRITICAL FIX: Add ID check to prevent /undefined calls
-    if (!id) {
-        console.warn('Attempted to fetch car with missing ID.');
-        return null;
-    }
     try {
         const response = await fetch(`${API_URL}/${id}`);
         if (!response.ok) {
@@ -57,12 +50,6 @@ export const getCar = async (id) => {
 
 // UPDATE (PUT)
 export const updateCar = async (id, updatedCarData) => {
-    // CRITICAL FIX: Add ID check and ensure data is being sent
-    if (!id || !updatedCarData) {
-        console.error('Missing ID or data for update.');
-        return { error: 'Missing parameters for update.' };
-    }
-    
     try {
         const response = await fetch(`${API_URL}/${id}`, {
             method: 'PUT',
@@ -72,9 +59,7 @@ export const updateCar = async (id, updatedCarData) => {
             body: JSON.stringify(updatedCarData),
         });
         if (!response.ok) {
-            // Include response text in error for better debugging
-            const errorBody = await response.text();
-            throw new Error(`HTTP error! status: ${response.status} - ${errorBody}`);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         return await response.json();
     } catch (error) {

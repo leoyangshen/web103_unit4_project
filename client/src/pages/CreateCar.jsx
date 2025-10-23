@@ -1,187 +1,166 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { createCar } from '../services/CarsAPI.js'
-// NOTE: Make sure these utility imports are correct for your setup
-import { calculateTotalPrice } from '../utilities/priceCalculator.js' 
-import { checkImpossibleCombo } from '../utilities/validation.js'
-import '../App.css'
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { calculateTotalPrice } from '../utilities/priceCalculator';
+import { checkImpossibleCombo } from '../utilities/validation';
+import { createCar } from '../services/CarsAPI';
+import '../App.css';
 
 const CreateCar = () => {
-    const navigate = useNavigate()
+    const navigate = useNavigate();
 
-    // State to track if the user has started configuration
-    const [isConfiguring, setIsConfiguring] = useState(false)
-    
-    // State for the car's customizable features
+    // CRITICAL FIX: Include required DB fields in the state
     const [car, setCar] = useState({
-        name: '',
-        exterior_color: 'Red',
-        rim_style: 'Standard Alloy',
-        interior_package: 'Standard Cloth',
-    })
-    
-    const [totalPrice, setTotalPrice] = useState(0) 
-    const [validationError, setValidationError] = useState('')
-    const [formSubmitted, setFormSubmitted] = useState(false)
+        name: 'My Custom Car',
+        exteriorColor: 'Midnight Silver',
+        rimStyle: 'Standard Alloy',
+        interiorPackage: 'Standard Cloth',
+        // Database required fields (not from user input)
+        baseType: 'Bolt Bucket',
+        submittedBy: 'Guest Designer', 
+    });
 
-    // --- Core Logic: Price Calculation and Validation ---
-    // Runs whenever the 'car' object changes
+    const [totalPrice, setTotalPrice] = useState(0);
+    const [validationError, setValidationError] = useState('');
+    const [formSubmitted, setFormSubmitted] = useState(false);
+
+    // --- EFFECT 1: Calculate Price and Check Impossible Combo ---
     useEffect(() => {
-        // Calculate Price
-        const price = calculateTotalPrice(car)
-        setTotalPrice(price)
+        // Map current state to the format the utilities expect
+        const calculatorOptions = {
+            exteriorColor: car.exteriorColor,
+            rimStyle: car.rimStyle,
+            interiorPackage: car.interiorPackage,
+        };
 
-        // Run Validation Check
-        const error = checkImpossibleCombo(car)
-        setValidationError(error)
-    }, [car])
+        const price = calculateTotalPrice(calculatorOptions);
+        setTotalPrice(price);
+        
+        // Check for impossible combo
+        const isImpossible = checkImpossibleCombo(calculatorOptions);
+        
+        if (isImpossible) {
+            setValidationError('Impossible combination: Premium features require Premium or Aero Carbon Rims.');
+        } else {
+            setValidationError('');
+        }
+    }, [car]); // Recalculate whenever 'car' state changes
 
-    // --- Handle Input Changes ---
     const handleChange = (e) => {
-        const { name, value } = e.target
+        const { name, value } = e.target;
         setCar(prevCar => ({
             ...prevCar,
             [name]: value,
-        }))
-    }
+        }));
+    };
 
-    // --- Handle Form Submission ---
     const handleSubmit = async (e) => {
-        e.preventDefault()
-        setFormSubmitted(true)
+        e.preventDefault();
+        setFormSubmitted(true);
 
-        // 1. Pre-submission Checks
-        if (validationError) {
-            console.error('Validation failed:', validationError)
-            return
-        }
-        
-        // 2. CRITICAL FIX: Re-calculate price on submit and ensure it's a number
-        let priceOnSubmit = calculateTotalPrice(car) 
-        
-        // Defensive check: Ensure price is a number and not zero
-        priceOnSubmit = Number(priceOnSubmit)
-
-        // Ensure name is not empty (required by DB)
-        if (car.name.trim() === '') {
-            setValidationError('Car name cannot be empty.')
-            return
+        // Client-side validation check
+        if (!car.name || validationError) {
+            return;
         }
 
-        // NEW CHECK: Prevent submission if price is zero or invalid
-        if (isNaN(priceOnSubmit) || priceOnSubmit <= 0) {
-            setValidationError('Price must be greater than zero. Check configurations.')
-            return
-        }
+        // CRITICAL FIX: Map client-side camelCase state to server-side snake_case DB columns
+        const newCarData = {
+            item_name: car.name,
+            exterior_color: car.exteriorColor,
+            rim_style: car.rimStyle,
+            interior_package: car.interiorPackage,
+            
+            // Required DB fields
+            base_type: car.baseType,
+            submitted_by: car.submittedBy,
+            
+            // Final calculated price
+            total_price: totalPrice,
+        };
 
         try {
-            // 3. Construct Payload
-            const carData = {
-                ...car,
-                final_price: priceOnSubmit, // Use the fresh calculated price (now guaranteed number)
+            const result = await createCar(newCarData);
+            
+            if (result && !result.error) {
+                // Navigate to the newly created car's detail page
+                navigate(`/customcars/${result.id}`);
+            } else {
+                console.error("Creation failed with server error:", result.error);
+                setValidationError(`Failed to create car: ${result.error || 'Check server logs.'}`);
             }
-            
-            // 4. API Call
-            const newCar = await createCar(carData)
-            
-            // 5. Success & Navigation
-            // This will only run if the POST returns the new car object with an ID
-            navigate(`/customcars/${newCar.id}`) 
         } catch (error) {
-            console.error('Failed to create car:', error)
-            // Show a user-friendly error message
-            alert('Failed to save car configuration. Please ensure the server is running and try again.') 
+            console.error('Network or unknown creation error:', error);
+            setValidationError('A network error occurred. Could not create car.');
         }
-    }
+    };
+    
+    // Disable submit button if name is empty or validation error exists
+    const isSubmitDisabled = !car.name || !!validationError;
 
-    // Determine if the submit button should be disabled
-    const isSubmitDisabled = validationError || car.name.trim() === '' || totalPrice <= 0
-
-    // --- Conditional Rendering ---
-    if (!isConfiguring) {
-        // ... (Landing Page JSX remains the same)
-        return (
-            <div className="landing-view">
-                <div className="landing-content">
-                    {/* Placeholder SVG Car Image or high-impact text */}
-                    <h1>The Bolt Bucket</h1>
-                    <p className="subtitle">Design your dream electric car now. Total freedom. Zero emissions.</p>
-
-                    {/* Placeholder image representation */}
-                    <svg width="400" height="200" viewBox="0 0 400 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="car-svg">
-                        <rect x="50" y="100" width="300" height="50" rx="10" fill="#333" />
-                        <rect x="100" y="80" width="200" height="30" rx="5" fill="#4A4A4A" />
-                        <circle cx="100" cy="150" r="15" fill="#111" stroke="#FFD700" strokeWidth="3"/>
-                        <circle cx="300" cy="150" r="15" fill="#111" stroke="#FFD700" strokeWidth="3"/>
-                        <path d="M110 100 L130 80 L270 80 L290 100 Z" fill="#666" />
-                        <text x="200" y="130" fontSize="24" fill="#FFFFFF" textAnchor="middle" fontWeight="bold">BOLT</text>
-                    </svg>
-
-                    <button className="primary" onClick={() => setIsConfiguring(true)}>
-                        Start Customization
-                    </button>
-                    <a href="/customcars" role="button" className="secondary">View Existing Cars</a>
-                </div>
-            </div>
-        )
-    }
-
-    // Configuration form view
     return (
-        <div className="container configuration-view">
-            <h1 className="title">Configure Your Custom Car</h1>
-            <h2 className="subtitle">Total Price: ${totalPrice.toLocaleString()}</h2>
+        <div className="create-car-page">
+            <hgroup>
+                <h2>Configure Your Bolt Bucket</h2>
+                <p>Build your dream car, one component at a time.</p>
+            </hgroup>
             
-            <form onSubmit={handleSubmit} className="custom-form">
-                
-                <label htmlFor="name">Car Name</label>
+            <form onSubmit={handleSubmit}>
+                {/* Configuration Name - REQUIRED */ }
+                <label htmlFor="name">Configuration Name</label>
                 <input
-                    type="text"
                     id="name"
                     name="name"
+                    type="text"
+                    placeholder="e.g., Fancy Smancy"
                     value={car.name}
                     onChange={handleChange}
-                    placeholder="e.g., Lightning Bolt"
                     required
                 />
-                
+
                 {/* Exterior Color */}
-                <label htmlFor="exterior_color">Exterior Color</label>
+                <label htmlFor="exteriorColor">Exterior Color</label>
                 <select
-                    id="exterior_color"
-                    name="exterior_color"
-                    value={car.exterior_color}
+                    id="exteriorColor"
+                    name="exteriorColor"
+                    value={car.exteriorColor}
                     onChange={handleChange}
                 >
-                    <option value="Red">Red</option>
-                    <option value="Blue">Blue</option>
-                    <option value="Matte Black">Matte Black (+$3,000)</option>
+                    <option value="Midnight Silver">Midnight Silver (Base)</option>
+                    <option value="Obsidian Black">Obsidian Black (+$1,000)</option>
+                    <option value="Solar Red">Solar Red (+$2,500)</option>
                 </select>
 
-                {/* Rim Style (Implies Drive Type) */}
-                <label htmlFor="rim_style">Rim Style</label>
+                {/* Rim Style */}
+                <label htmlFor="rimStyle">Rim Style</label>
                 <select
-                    id="rim_style"
-                    name="rim_style"
-                    value={car.rim_style}
+                    id="rimStyle"
+                    name="rimStyle"
+                    value={car.rimStyle}
                     onChange={handleChange}
                 >
-                    <option value="Standard Alloy">Standard Alloy</option>
+                    <option value="Standard Alloy">Standard Alloy (Base)</option>
                     <option value="Sport">Sport (+$1,500)</option>
                     <option value="Aero Carbon">Aero Carbon (+$5,000)</option>
                 </select>
 
                 {/* Interior Package */}
-                <label htmlFor="interior_package">Interior Package</label>
+                <label htmlFor="interiorPackage">Interior Package</label>
                 <select
-                    id="interior_package"
-                    name="interior_package"
-                    value={car.interior_package}
+                    id="interiorPackage"
+                    name="interiorPackage"
+                    value={car.interiorPackage}
                     onChange={handleChange}
                 >
-                    <option value="Standard Cloth">Standard Cloth</option>
+                    <option value="Standard Cloth">Standard Cloth (Base)</option>
                     <option value="Premium Leather">Premium Leather (+$2,000)</option>
                 </select>
+                
+                <hr/>
+                
+                {/* Total Price Display */}
+                <div className="total-price-display">
+                    <strong>Total Price:</strong> 
+                    <span className="price-tag">${totalPrice.toLocaleString()}</span>
+                </div>
 
                 {/* Validation Error Message */}
                 {(formSubmitted || validationError) && validationError && (
@@ -191,12 +170,12 @@ const CreateCar = () => {
                 )}
 
                 <button type="submit" disabled={isSubmitDisabled}>
-                    {isSubmitDisabled ? 'Fix Configuration to Save' : `Save Configuration for $${totalPrice.toLocaleString()}`}
+                    {isSubmitDisabled ? 'Fix Configuration to Create' : 'Create New Car'}
                 </button>
             </form>
         </div>
-    )
-}
+    );
+};
 
-export default CreateCar
+export default CreateCar;
 

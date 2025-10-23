@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Link is removed from import
+import { Link, useNavigate } from 'react-router-dom';
 import { getAllCars, deleteCar } from '../services/CarsAPI';
 import '../App.css';
 
@@ -27,25 +27,27 @@ const ViewCars = () => {
         }
     }
 
-    const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this car?')) {
+    // Handles navigation to the details page, which now includes the Edit and Delete options
+    const handleViewCar = (id) => {
+        navigate(`/customcars/${id}`)
+    }
+
+    const handleDelete = async (id, name) => {
+        // Use a simple confirmation since window.confirm() is typically discouraged
+        if (window.confirm(`Are you sure you want to delete the car: ${name}?`)) {
             try {
                 await deleteCar(id);
-                fetchCars(); // Refresh the list after deletion
-            } catch (error) {
-                console.error('Error deleting car:', error);
-                alert('Failed to delete car. Check server console.');
+                // After successful deletion, refresh the list
+                fetchCars(); 
+            } catch (err) {
+                console.error('Error deleting car:', err);
+                setError(`Failed to delete car ID ${id}.`);
             }
         }
     };
     
-    // CRITICAL: This path must match your App.jsx route definition: /customcars/:id
-    const handleCarClick = (id) => {
-        // We confirmed this needs to be /customcars/${id} to match your router setup
-        navigate(`/customcars/${id}`)
-    }
-
-    if (!loading && cars && cars.length ===0 )
+    // --- Empty State View ---
+    if (!loading && cars && cars.length === 0)
     {
 	return (
 	    <div className="container empty-state">
@@ -53,86 +55,87 @@ const ViewCars = () => {
                     <h2>No custom cars found. Start creating one!</h2>
                 </hgroup>
             
-            {/* ATTACH THE ONCLICK HANDLER HERE */}
                 <button
                     className="primary"
                     onClick={() => navigate('/')} 
                 >
-                    Configure Your First Car
+                    {/* CRITICAL FIX 1: Rename the button for the empty state */}
+                    Go to Home (Create Car)
                 </button>
             </div>
         )
     }
 
     if (loading) {
-        return <div className="container loading">Loading custom configurations...</div>
+        return <div className="container"><h2>Loading Configurations...</h2></div>
     }
 
     if (error) {
-        return <div className="container error-state">{error}</div>
+        return <div className="container error-message"><h2>Error!</h2><p>{error}</p></div>
     }
-
+    
+    // --- Main List View ---
     return (
-        <div className="container">
-            <h1 className="title">All Custom Configurations</h1>
+        <div className="container view-cars-page">
+            <header className="page-header">
+                <hgroup>
+                    <h2>All Custom Configurations</h2>
+                </hgroup>
+                
+                {/* CRITICAL FIX 2: Rename the button in the main view */}
+                <button
+                    className="primary"
+                    onClick={() => navigate('/')} 
+                >
+                    Home (Create Car)
+                </button>
+            </header>
 
-            <button onClick={() => navigate('/')} className="create-button">
-        	Home        
-            </button>
-
-            {cars.length === 0 ? (
-                <div className="empty-state">
-                    <p>No custom cars found. Start creating one!</p>
-                    <button onClick={() => navigate('/')} className="button">
-                        Configure Your First Car
-                    </button>
-                </div>
-            ) : (
-                <div className="car-list">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Color</th>
-                                <th>Rims</th>
-                                <th>Price</th>
-                                <th>Actions</th>
+            <div className="car-list">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Color</th>
+                            <th>Rims</th>
+                            <th>Price</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {cars.map(car => (
+                            <tr key={car.id}>
+                                <td>{car.id}</td>
+                                <td>{car.item_name}</td>
+                                <td>{car.exterior_color}</td>
+                                <td>{car.rim_style}</td>
+                                <td className="price-col">${car.total_price.toLocaleString()}</td>
+                                <td className="actions-col">
+                                    <button 
+                                        onClick={() => navigate(`/customcars/${car.id}/edit`)} 
+                                        className="edit-button small-button"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button 
+                                        onClick={() => handleViewCar(car.id)} 
+                                        className="view-button small-button"
+                                    >
+                                        View
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDelete(car.id, car.item_name)} 
+                                        className="delete-button small-button"
+                                    >
+                                        Delete
+                                    </button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {cars.map(car => (
-                                <tr key={car.id}>
-                                    <td>{car.id}</td>
-                                    <td>
-                                        {/* Use button for details */}
-                                        <button 
-                                            onClick={() => handleCarClick(car.id)} 
-                                            className="link-style-button"
-                                            style={{ textDecoration: 'underline' }}
-                                        >
-                                            {car.item_name}
-                                        </button>
-                                    </td>
-                                    <td>{car.exterior_color}</td>
-                                    <td>{car.rim_style}</td>
-                                    <td className="price-col">${car.total_price.toLocaleString()}</td>
-                                    <td>
-                                        {/* Delete Button */}
-                                        <button 
-                                            onClick={() => handleDelete(car.id)} 
-                                            className="delete-button"
-                                        >
-                                            Delete
-                                        </button>
-                                        {/* You'll add the Edit link here later */}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     )
 }

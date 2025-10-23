@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCar, updateCar } from '../services/CarsAPI';
 import { calculateTotalPrice } from '../utilities/priceCalculator';
+// NOTE: We assume you have a validation.js with checkImpossibleCombo
 import { checkImpossibleCombo } from '../utilities/validation'; 
 import '../App.css';
 
@@ -35,16 +36,17 @@ const EditCar = () => {
                 const data = await getCar(customItemId);
                 
                 if (data) {
-                    // Set initial state from fetched data, including hidden required fields
+                    // Set initial state from fetched data
                     setCar({
                         item_name: data.item_name,
                         exterior_color: data.exterior_color,
                         rim_style: data.rim_style,
                         interior_package: data.interior_package,
-                        base_type: data.base_type || 'Bolt Bucket', // Ensure defaults if missing
-                        submitted_by: data.submitted_by || 'Guest Designer', // Ensure defaults if missing
+                        base_type: data.base_type,
+                        submitted_by: data.submitted_by,
                     });
-                    // Initial price calculation will run in EFFECT 2
+                    setTotalPrice(parseFloat(data.total_price));
+                    console.log("DEBUG: Initial car data fetched and set.");
                 }
                 setLoading(false);
             } catch (err) {
@@ -56,13 +58,17 @@ const EditCar = () => {
     }, [customItemId]);
 
 
-    // --- EFFECT 2: Recalculate Price and Validate on Option Change (The critical fix) ---
+    // --- EFFECT 2: Recalculate Price and Validate on Option Change ---
     useEffect(() => {
-        // Only run calculation once loading is complete
+        // This is the function that should run every time 'car' state changes.
+        console.log("DEBUG: EFFECT 2 (Price/Validation) is running...");
+        
         if (loading) {
+            console.log("DEBUG: ...Skipped because loading is true.");
             return;
         }
 
+        // 1. Setup options object for calculator/validation utilities
         const calculatorOptions = {
             name: car.item_name,
             color: car.exterior_color,
@@ -70,19 +76,25 @@ const EditCar = () => {
             package: car.interior_package,
         };
 
-        // 1. Calculate new price
+        // 🚨 DEBUG STEP 1: Log the options being sent to the calculator
+        console.log("DEBUG: Options for calculator:", calculatorOptions);
+
+        // 2. Calculate new price
         const newPrice = calculateTotalPrice(calculatorOptions);
         setTotalPrice(newPrice);
         
-        // 2. Run validation
+        // 🚨 DEBUG STEP 2: Log the resulting price
+        console.log("DEBUG: New calculated price:", newPrice);
+
+        // 3. Run validation
         const comboError = checkImpossibleCombo(calculatorOptions);
         setValidationError(comboError);
 
-        // 3. Update submit button state
+        // 4. Update submit button state
         const isDisabled = !!comboError || newPrice === 0 || !car.item_name.trim();
         setIsSubmitDisabled(isDisabled);
 
-    // CRITICAL DEPENDENCY: Ensures this effect runs when 'car' state (inputs) changes
+    // CRITICAL DEPENDENCY: Ensures this effect runs when inputs change
     }, [car, loading]); 
 
 
@@ -90,7 +102,10 @@ const EditCar = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        // This setCar update triggers EFFECT 2 above
+        // 🚨 DEBUG STEP 3: Log the user's input change
+        console.log(`DEBUG: Input changed - Name: ${name}, Value: ${value}`);
+
+        // This update triggers EFFECT 2 above
         setCar(prevCar => ({
             ...prevCar,
             [name]: value,
@@ -102,6 +117,7 @@ const EditCar = () => {
         setFormSubmitted(true);
 
         if (isSubmitDisabled) {
+            console.log("DEBUG: Submission blocked by isSubmitDisabled.");
             return;
         }
 
@@ -111,13 +127,16 @@ const EditCar = () => {
                 exterior_color: car.exterior_color,
                 rim_style: car.rim_style,
                 interior_package: car.interior_package,
-                base_type: car.base_type, 
-                submitted_by: car.submitted_by, 
+                base_type: car.base_type || 'Bolt Bucket',
+                submitted_by: car.submitted_by || 'Guest Designer',
                 
-                // CRITICAL FIX: Include the calculated total price (fixed to 2 decimal places)
+                // CRITICAL: Send the updated price
                 total_price: totalPrice.toFixed(2), 
             };
             
+            // 🚨 DEBUG STEP 4: Log the final payload before API call
+            console.log("DEBUG: Final PUT payload:", updatedCarData);
+
             const result = await updateCar(customItemId, updatedCarData);
 
             if (result && result.error) {
@@ -125,7 +144,6 @@ const EditCar = () => {
                 return;
             }
 
-            // Redirect to the updated car's details page
             navigate(`/customcars/${customItemId}`);
 
         } catch (error) {
@@ -163,7 +181,7 @@ const EditCar = () => {
                 {carNameError && <p className="error-message">{carNameError}</p>}
 
 
-                {/* Exterior Color - CLEANED UP VALUES */}
+                {/* Exterior Color - PREPOPULATED */}
                 <label htmlFor="exterior_color">Exterior Color</label>
                 <select
                     id="exterior_color"
@@ -177,7 +195,7 @@ const EditCar = () => {
                     <option value="Solar Red">Solar Red (+$2,500)</option>
                 </select>
 
-                {/* Rim Style - CLEANED UP VALUES */}
+                {/* Rim Style - PREPOPULATED */}
                 <label htmlFor="rim_style">Rim Style</label>
                 <select
                     id="rim_style"
@@ -190,7 +208,7 @@ const EditCar = () => {
                     <option value="Aero Carbon">Aero Carbon (+$5,000)</option>
                 </select>
 
-                {/* Interior Package - CLEANED UP VALUES */}
+                {/* Interior Package - PREPOPULATED */}
                 <label htmlFor="interior_package">Interior Package</label>
                 <select
                     id="interior_package"
@@ -202,13 +220,10 @@ const EditCar = () => {
                     <option value="Premium Leather">Premium Leather (+$2,000)</option>
                 </select>
                 
-                {/* --- RUNNING TALLY DISPLAY --- */}
                 <div className="final-price-tally">
                     <strong>Current Total Price:</strong> 
                     <span className="price-tag"> ${totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
-                {/* -------------------------------------------------- */}
-
 
                 {/* Validation Error Message */}
                 {(formSubmitted || validationError) && validationError && (

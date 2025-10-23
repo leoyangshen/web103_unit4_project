@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getCar, deleteCar } from '../services/CarsAPI';
+// NOTE: Assuming window.confirm is still allowed for a quick prototype, 
+// though a custom modal is better practice in React.
+import { getCar, deleteCar } from '../services/CarsAPI'; 
 import '../App.css';
 
 const CarDetails = () => {
@@ -12,7 +14,9 @@ const CarDetails = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // --- CRITICAL FIX: Add check for customItemId ---
     useEffect(() => {
+        // Only attempt to fetch if the ID is actually present in the URL params
         if (customItemId) {
             fetchCarDetails(customItemId);
         } else {
@@ -26,8 +30,14 @@ const CarDetails = () => {
             setLoading(true);
             // This is the call that was failing because 'id' was undefined
             const data = await getCar(id); 
-            setCar(data);
-            setError(null);
+            
+            if (data && !data.error) {
+                setCar(data);
+                setError(null);
+            } else {
+                setError('Car not found or server error during fetch.');
+                setCar(null);
+            }
         } catch (err) {
             console.error(`Error fetching car with ID ${id}:`, err);
             setError('Failed to load car details. Check server connection.');
@@ -40,37 +50,44 @@ const CarDetails = () => {
         // Use a custom modal or simple confirmation (since alerts are disallowed)
         if (window.confirm(`Are you sure you want to delete the car: ${car.item_name}?`)) {
             try {
-                await deleteCar(id);
-                // Redirect back to the view all cars page after successful deletion
-                navigate('/customcars'); 
-            } catch (error) {
-                console.error('Error deleting car:', error);
-                // Use a visible message instead of an alert
-                setError('Failed to delete car. Check server console.');
+                // Call the API function to DELETE the car
+                const result = await deleteCar(id);
+                
+                if (result.success) {
+                    // Navigate back to the list of cars after successful deletion
+                    navigate('/customcars');
+                } else {
+                    setError('Failed to delete car. Check server logs.');
+                }
+            } catch (err) {
+                console.error(`Error deleting car with ID ${id}:`, err);
+                setError('A network error occurred. Could not delete car.');
             }
         }
     };
 
+    // --- Loading, Error, and Not Found States ---
     if (loading) {
-        return <div className="container loading">Loading car details...</div>;
+        return <p aria-busy="true">Loading car details...</p>;
     }
 
     if (error) {
-        return <div className="container error-state">Error: {error}</div>;
+        return <p className="error-message">Error: {error}</p>;
     }
 
     if (!car) {
-        return <div className="container error-state">Car not found.</div>;
+        return <p className="error-message">Car configuration not found.</p>;
     }
 
+    // --- Main Display ---
     return (
-        <div className="container car-details-container">
+        <div className="car-details-page">
             <hgroup>
                 <h1>{car.item_name}</h1>
-                <p>Configured on: {new Date(car.created_at).toLocaleDateString()}</p>
+                <p>Configured by {car.submitted_by} ({car.base_type})</p>
             </hgroup>
 
-            <article className="car-summary">
+            <article className="details-summary">
                 <div className="detail-row">
                     <strong>Exterior Color:</strong> <span>{car.exterior_color}</span>
                 </div>
@@ -83,7 +100,8 @@ const CarDetails = () => {
                 <hr />
                 <div className="detail-row final-price">
                     <strong>Total Price:</strong> 
-                    <span className="price-tag">${car.total_price.toLocaleString()}</span>
+                    {/* CRITICAL: Use toLocaleString for currency formatting */ }
+                    <span className="price-tag">${parseFloat(car.total_price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                 </div>
             </article>
 
