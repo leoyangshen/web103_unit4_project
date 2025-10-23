@@ -1,47 +1,49 @@
 /**
- * Calculates the total price of a custom car configuration based on selected options.
- * * @param {object} carOptions - Object containing selected options.
- * @param {string} carOptions.color - Exterior color selected.
- * @param {string} carOptions.rims - Rim style selected.
- * @param {string} carOptions.package - Interior package selected.
+ * Calculates the total price of the customized car based on selected options.
+ * @param {object} options - Car configuration options.
  * @returns {number} The total price in USD.
  */
-export const calculateTotalPrice = (carOptions) => {
-    // Base price for the "Bolt Bucket" model
-    let totalPrice = 10000;
+export const calculateTotalPrice = (options) => {
+    // Base price of the car
+    let totalPrice = 10000; 
 
-    // --- Add Exterior Color Cost ---
-    switch (carOptions.color) {
+    // Destructure options for cleaner access
+    const { exterior_color, rim_style, interior_package } = options;
+
+    console.log("DEBUG: CALCULATOR - Calculating price for:", { exterior_color, rim_style, interior_package });
+
+    // --- 1. Exterior Color Pricing ---
+    switch (exterior_color) {
         case 'Deep Blue':
             totalPrice += 1000;
             break;
         case 'Cherry Red':
-        case 'Solar Red': // Both high-tier reds cost the same premium
+        case 'Solar Red':
             totalPrice += 2500;
             break;
-        // 'Midnight Silver' adds 0 (default/standard)
+        // Midnight Silver (default/base, cost 0)
     }
 
-    // --- Add Rim Style Cost ---
-    switch (carOptions.rims) {
+    // --- 2. Rim Style Pricing ---
+    switch (rim_style) {
         case 'Sport':
             totalPrice += 1500;
             break;
         case 'Aero Carbon':
-            totalPrice += 5000;
+            totalPrice += 5000; // <--- This was the likely culprit being skipped
             break;
-        // 'Standard Alloy' adds 0
+        // Standard Alloy (default/base, cost 0)
     }
 
-    // --- Add Interior Package Cost ---
-    switch (carOptions.package) {
+    // --- 3. Interior Package Pricing ---
+    switch (interior_package) {
         case 'Premium Leather':
             totalPrice += 2000;
             break;
-        // 'Standard Cloth' adds 0
+        // Standard Cloth (default/base, cost 0)
     }
-    
-    // Always return a number
+
+    console.log("DEBUG: CALCULATOR - Final calculated price:", totalPrice);
     return totalPrice;
 };
 

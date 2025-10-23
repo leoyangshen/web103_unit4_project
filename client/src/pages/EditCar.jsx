@@ -5,19 +5,23 @@ import { calculateTotalPrice } from '../utilities/priceCalculator';
 import { checkImpossibleCombo } from '../utilities/validation'; 
 import '../App.css';
 
-// This component performs three main actions: READ existing data, DISPLAY form, and SEND UPDATE (PUT).
+// Default configuration to prevent validation errors on initial render
+const INITIAL_CAR_STATE = {
+    item_name: 'econo box', // Must have a name to pass validation
+    exterior_color: 'Midnight Silver',
+    rim_style: 'Standard Alloy',
+    interior_package: 'Standard Cloth',
+    base_type: 'Bolt Bucket', 
+    submitted_by: 'Guest Designer', 
+};
+
+
 const EditCar = () => {
     const { customItemId } = useParams(); 
     const navigate = useNavigate();
 
-    const [car, setCar] = useState({
-        item_name: '',
-        exterior_color: '',
-        rim_style: '',
-        interior_package: '',
-        base_type: 'Bolt Bucket',
-        submitted_by: 'Guest Designer',
-    });
+    // Initialize state with non-empty defaults to pass validation before fetch
+    const [car, setCar] = useState(INITIAL_CAR_STATE);
     
     const [loading, setLoading] = useState(true);
     const [totalPrice, setTotalPrice] = useState(0);
@@ -26,25 +30,27 @@ const EditCar = () => {
     const [isSubmitDisabled, setIsSubmitDisabled] = useState(true);
 
 
-    // --- EFFECT 1: Fetch Existing Data on Load ---
+    // --- EFFECT 1: Fetch Existing Data on Load (Reads from DB) ---
     useEffect(() => {
         const fetchExistingCar = async () => {
+            console.log("DEBUG: EFFECT 1 (Fetch) is running...");
+
             if (!customItemId) return;
             try {
                 setLoading(true);
                 const data = await getCar(customItemId);
                 
                 if (data) {
-                    // Set initial state from fetched data, including hidden required fields
+                    // Overwrite the INITIAL_CAR_STATE with the fetched data
                     setCar({
                         item_name: data.item_name,
                         exterior_color: data.exterior_color,
                         rim_style: data.rim_style,
                         interior_package: data.interior_package,
-                        base_type: data.base_type || 'Bolt Bucket', // Ensure defaults if missing
-                        submitted_by: data.submitted_by || 'Guest Designer', // Ensure defaults if missing
+                        base_type: data.base_type || INITIAL_CAR_STATE.base_type, 
+                        submitted_by: data.submitted_by || INITIAL_CAR_STATE.submitted_by, 
                     });
-                    // Initial price calculation will run in EFFECT 2
+                    console.log("DEBUG: Initial car data fetched and set:", data.item_name);
                 }
                 setLoading(false);
             } catch (err) {
@@ -56,33 +62,41 @@ const EditCar = () => {
     }, [customItemId]);
 
 
-    // --- EFFECT 2: Recalculate Price and Validate on Option Change (The critical fix) ---
+    // --- EFFECT 2: Recalculate Price, Validate, and Check Submit State (Runs on *every* state change) ---
     useEffect(() => {
-        // Only run calculation once loading is complete
+        console.log("DEBUG: EFFECT 2 (Price/Validation) is running...");
+        
         if (loading) {
+            console.log("DEBUG: ...Skipped price/validation because loading is true.");
+            // If still loading, we use the default state for now, but prevent submission
             return;
         }
 
         const calculatorOptions = {
-            name: car.item_name,
-            color: car.exterior_color,
-            rims: car.rim_style,
-            package: car.interior_package,
+            item_name: car.item_name,
+            exterior_color: car.exterior_color,
+            rim_style: car.rim_style,
+            interior_package: car.interior_package,
         };
+
+        console.log("DEBUG: Config sent to utilities:", calculatorOptions);
 
         // 1. Calculate new price
         const newPrice = calculateTotalPrice(calculatorOptions);
         setTotalPrice(newPrice);
-        
-        // 2. Run validation
+        console.log("DEBUG: New calculated price:", newPrice);
+
+        // 2. Run validation (Calls validation.js)
         const comboError = checkImpossibleCombo(calculatorOptions);
         setValidationError(comboError);
+        console.log("DEBUG: Validation result received by component:", comboError);
 
         // 3. Update submit button state
         const isDisabled = !!comboError || newPrice === 0 || !car.item_name.trim();
         setIsSubmitDisabled(isDisabled);
+        console.log("DEBUG: Submit button disabled state:", isDisabled);
 
-    // CRITICAL DEPENDENCY: Ensures this effect runs when 'car' state (inputs) changes
+    // CRITICAL DEPENDENCY: Runs every time the 'car' state (inputs) or 'loading' state changes
     }, [car, loading]); 
 
 
@@ -90,6 +104,7 @@ const EditCar = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        console.log(`DEBUG: Input changed - Name: ${name}, Value: ${value}`);
         // This setCar update triggers EFFECT 2 above
         setCar(prevCar => ({
             ...prevCar,
@@ -100,8 +115,10 @@ const EditCar = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setFormSubmitted(true);
+        console.log("DEBUG: handleSubmit initiated.");
 
         if (isSubmitDisabled) {
+            console.log("DEBUG: Submission blocked by isSubmitDisabled state.");
             return;
         }
 
@@ -113,19 +130,19 @@ const EditCar = () => {
                 interior_package: car.interior_package,
                 base_type: car.base_type, 
                 submitted_by: car.submitted_by, 
-                
-                // CRITICAL FIX: Include the calculated total price (fixed to 2 decimal places)
                 total_price: totalPrice.toFixed(2), 
             };
             
+            console.log("DEBUG: Sending PUT Payload:", updatedCarData);
             const result = await updateCar(customItemId, updatedCarData);
 
             if (result && result.error) {
+                console.error("DEBUG: API returned error on PUT:", result.error);
                 setValidationError(result.error);
                 return;
             }
 
-            // Redirect to the updated car's details page
+            console.log("DEBUG: Update successful. Navigating to details page.");
             navigate(`/customcars/${customItemId}`);
 
         } catch (error) {
