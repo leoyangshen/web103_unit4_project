@@ -1,0 +1,100 @@
+import React, { createContext, useState, useEffect } from 'react';
+// Firestore Imports
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
+
+// 1. Context Creation
+export const AuthContext = createContext({
+    db: null,
+    auth: null,
+    userId: null,
+    isAuthReady: false,
+});
+
+// 2. Global Variable Initialization
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// Set Firestore debug logging (optional, but good for diagnostics)
+// setLogLevel('debug'); 
+
+export const AuthProvider = ({ children }) => {
+    // 3. State for Services and User
+    const [db, setDb] = useState(null);
+    const [auth, setAuth] = useState(null);
+    const [userId, setUserId] = useState(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+
+    // 4. Initialization and Authentication Effect
+    useEffect(() => {
+        // Only run initialization once
+        if (Object.keys(firebaseConfig).length === 0) {
+            console.error("FIREBASE ERROR: firebaseConfig is missing or empty.");
+            setIsAuthReady(true);
+            return;
+        }
+
+        try {
+            // Initialize Firebase App
+            const app = initializeApp(firebaseConfig);
+            const firestoreDb = getFirestore(app);
+            const firebaseAuth = getAuth(app);
+
+            setDb(firestoreDb);
+            setAuth(firebaseAuth);
+
+            // Authentication Handler
+            const authenticateUser = async () => {
+                if (initialAuthToken) {
+                    // Use the custom token provided by the environment
+                    await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                } else {
+                    // Fallback to anonymous sign-in if no token is available
+                    await signInAnonymously(firebaseAuth);
+                }
+            };
+
+            // Setup Auth State Listener
+            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+                if (user) {
+                    setUserId(user.uid);
+                    console.log(`User Authenticated. UID: ${user.uid}`);
+                } else {
+                    // Use a random ID if authentication fails, though typically we expect a user object here
+                    setUserId(crypto.randomUUID());
+                    console.warn("Authentication failed, falling back to random UUID.");
+                }
+                setIsAuthReady(true);
+            });
+
+            // Start the sign-in process
+            authenticateUser();
+            
+            // Cleanup subscription on component unmount
+            return () => unsubscribe();
+
+        } catch (error) {
+            console.error("Firebase Initialization or Auth Error:", error);
+            setIsAuthReady(true);
+            setUserId(crypto.randomUUID()); // Ensure we still have a unique ID for local operations
+        }
+    }, []);
+
+    // 5. Context Value
+    const contextValue = {
+        db,
+        auth,
+        userId,
+        isAuthReady,
+        appId, // Export appId for use in Firestore path construction
+    };
+
+    return (
+        <AuthContext.Provider value={contextValue}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
+

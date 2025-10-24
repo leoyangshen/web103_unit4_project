@@ -1,0 +1,43 @@
+import React from 'react'
+import { Routes, Route } from 'react-router-dom'
+import Navigation from './components/Navigation' // Removed .jsx
+import CreateCar from './pages/CreateCar' // Removed .jsx
+import ViewCars from './pages/ViewCars' // Removed .jsx
+import CarDetails from './pages/CarDetails' // Removed .jsx
+import EditCar from './pages/EditCar' // Removed .jsx
+
+// NEW IMPORT: Import the component that lists the user's cars
+import CustomCars from './pages/CustomCars' // Removed .jsx
+import './App.css'
+
+const App = () => {
+return (
+// **** CRITICAL FIX: ONLY ONE ROOT ELEMENT IS RETURNED ****
+<div className="App">
+
+  {/* Both Navigation and main are children of the single root div */}
+  <Navigation />
+
+  <main className="container"> 
+    <Routes>
+      <Route path="/" element={<CreateCar />} />
+      
+      {/* NEW ROUTE: Mapped the list of custom cars to /customcars */}
+      <Route path="/customcars" element={<CustomCars />} /> 
+      
+      {/* Existing Routes (We'll rename ViewCars to something else if needed later) */}
+      {/* NOTE: The existing ViewCars component currently conflicts with our new CustomCars list, 
+           but we'll keep the old path structure for the other routes for now. 
+           We will use the new CustomCars component for the list view at '/customcars' */}
+      <Route path="/customcars/:customItemId" element={<CarDetails />} />
+      <Route path="/customcars/:customItemId/edit" element={<EditCar />} />
+    </Routes>
+  </main>
+  
+</div>
+
+)
+}
+
+export default App
+
